@@ -1,103 +1,119 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState, useRef, useEffect } from 'react';
+import MetadataStep, { Metadata } from './phases/Metadata';
+import FaceCenter from './phases/FaceCenter';
+import GridFixationClick from './phases/GridFixationClick';
+import GridFixationGaze from './phases/GridFixationGaze';
+import RadialSaccadeClick from './phases/RadialSaccadeClick';
+import RadialSaccadeGaze from './phases/RadialSaccadeGaze';
+import ExportDataZip from './phases/ExportDataZip';
+import { usePersistentFrameCapture } from '@/hooks/usePersistentFrameCapture';
+import { Phase } from '@/types';
+
+
+export default function HomePage() {
+  const [phase, setPhase] = useState<Phase>('metadata');
+  const [metadata, setMetadata] = useState<Metadata | null>(null);
+
+  // ✅ 각 단계별 분리된 데이터 저장
+  const [gridFixationClick1, setGridFixationClick1] = useState<any[]>([]);
+  const [gridFixationClick2, setGridFixationClick2] = useState<any[]>([]);
+  const [radialSaccadeClick1, setRadialSaccadeClick1] = useState<any[]>([]);
+  const [radialSaccadeClick2, setRadialSaccadeClick2] = useState<any[]>([]);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const frameBufferRef = usePersistentFrameCapture(videoRef);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        videoRef.current!.srcObject = stream;
+      })
+      .catch((err) => {
+        console.error('Camera access denied or failed:', err);
+      });
+  }, []);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <>
+      {phase === 'metadata' && (
+        <MetadataStep
+          onSubmit={(data) => {
+            setMetadata(data);
+            setPhase('face-center');
+            console.log('✅ 메타데이터 저장:', data);
+          }}
         />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+      )}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      {/* 캠 비디오 화면 (좌측 상단 작게) */}
+      <video
+        ref={videoRef}
+        className="fixed top-2 left-2 w-40 h-auto opacity-70 rounded z-50 shadow-lg"
+        autoPlay
+        muted
+        playsInline
+      />
+
+      {phase === 'face-center' && (
+        <FaceCenter
+          videoRef={videoRef}
+          onNext={() => setPhase('grid-fixation-click-1')}
+        />
+      )}
+
+      {phase === 'grid-fixation-click-1' && (
+        <GridFixationClick
+          videoRef={videoRef}
+          frameBufferRef={frameBufferRef}
+          onCapture={(datum) => setGridFixationClick1(prev => [...prev, datum])}
+          onNext={() => setPhase('radial-saccade-click-1')}
+        />
+      )}
+
+      {phase === 'radial-saccade-click-1' && (
+        <RadialSaccadeClick
+          videoRef={videoRef}
+          frameBufferRef={frameBufferRef}
+          onCapture={(datum) => setRadialSaccadeClick1(prev => [...prev, datum])}
+          onNext={() => setPhase('grid-fixation-click-2')}
+        />
+      )}
+
+      {phase === 'grid-fixation-click-2' && (
+        <GridFixationClick
+          videoRef={videoRef}
+          frameBufferRef={frameBufferRef}
+          onCapture={(datum) => setGridFixationClick2(prev => [...prev, datum])}
+          onNext={() => setPhase('radial-saccade-click-2')}
+        />
+      )}
+
+      {phase === 'radial-saccade-click-2' && (
+        <RadialSaccadeClick
+          videoRef={videoRef}
+          frameBufferRef={frameBufferRef}
+          onCapture={(datum) => setRadialSaccadeClick2(prev => [...prev, datum])}
+          onNext={() => setPhase('export-data-zip')}
+        />
+      )}
+
+      
+
+      {phase === 'export-data-zip' && (
+        <ExportDataZip
+          metadata={metadata!}
+          taskData={{
+            grid_fixation_click_1: gridFixationClick1,            
+            radial_saccade_click_1: radialSaccadeClick1,
+            grid_fixation_click_2: gridFixationClick2,
+            radial_saccade_click_2: radialSaccadeClick2,
+          }}
+        />
+      )}
+    </>
   );
 }
