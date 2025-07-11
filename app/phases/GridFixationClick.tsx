@@ -1,22 +1,20 @@
+// GridFixationClick.tsx
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
 
 type Props = {
   onNext: () => void;
-  videoRef: React.RefObject<HTMLVideoElement>;
-  frameBufferRef: React.RefObject<Blob[]>;
   onCapture: (data: {
-    images: Blob[];          // 항상 배열로 저장
-    targetX: number;         // 타겟의 화면상 위치
+    images: Blob[];
+    targetX: number;
     targetY: number;
-    timestamp: number;       // 캡처 시점
+    timestamp: number;
   }) => void;
 };
 
-const GRID_SIZE = 5; // Default: 5
+const GRID_SIZE = 5; // 필요시 5로 변경
 
-// 5x5 그리드 좌표를 무작위 순서로 섞음
 function shuffleGrid(): { row: number; col: number }[] {
   const all = [];
   for (let row = 0; row < GRID_SIZE; row++) {
@@ -31,31 +29,79 @@ function shuffleGrid(): { row: number; col: number }[] {
   return all;
 }
 
-export default function GridFixationClick({ onNext, videoRef, frameBufferRef, onCapture }: Props) {
-  const targets = useRef(shuffleGrid());         // 모든 타겟 순서
-  const [index, setIndex] = useState(0);         // 현재 타겟 인덱스
+export default function GridFixationClick({ onNext, onCapture }: Props) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const targets = useRef(shuffleGrid());
+  const [index, setIndex] = useState(0);
 
-  // 🔵 클릭 시 현재 타겟 위치와 timestamp, 그리고 frameBuffer에서 최신 프레임 1개 저장
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((s) => {
+        stream = s;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      })
+      .catch(() => {
+        alert('카메라 접근 오류');
+      });
+
+    const checkReady = () => {
+      const video = videoRef.current;
+      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        setVideoReady(true);
+      }
+    };
+    const video = videoRef.current;
+    video?.addEventListener('loadeddata', checkReady);
+
+    return () => {
+      video?.removeEventListener('loadeddata', checkReady);
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
   const handleClick = () => {
+    if (!videoReady) {
+      alert('비디오가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
     const target = targets.current[index];
     const screenX = (target.col + 0.5) * (window.innerWidth / GRID_SIZE);
     const screenY = (target.row + 0.5) * (window.innerHeight / GRID_SIZE);
     const timestamp = Date.now();
 
-    const latest = frameBufferRef.current?.at(-1); // 가장 최근 이미지 1개 사용
-    if (latest && latest.size > 0) {      
-      onCapture({ images: [latest], targetX: screenX, targetY: screenY, timestamp });
-    } else {
-      console.log('frameBufferRef:', frameBufferRef.current);
-      alert('캡처된 이미지가 없습니다. 잠시 후 다시 시도해주세요.');
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      alert('비디오가 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      return;
     }
 
-    // 다음 타겟 or 종료
-    if (index + 1 === targets.current.length) {
-      onNext();
-    } else {
-      setIndex(index + 1);
-    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx?.drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        onCapture({ images: [blob], targetX: screenX, targetY: screenY, timestamp });
+      } else {
+        alert('이미지 캡처에 실패했습니다.');
+      }
+
+      if (index + 1 === targets.current.length) {
+        onNext();
+      } else {
+        setIndex(index + 1);
+      }
+    }, 'image/jpeg', 0.92);
   };
 
   const target = targets.current[index];
@@ -64,7 +110,21 @@ export default function GridFixationClick({ onNext, videoRef, frameBufferRef, on
 
   return (
     <div className="relative w-screen h-screen bg-black">
-      {/* 🎯 타겟 버튼 (클릭 시 다음으로 진행) */}
+      <video
+        ref={videoRef}
+        style={{
+          opacity: 0,
+          width: 1,
+          height: 1,
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          pointerEvents: 'none',
+        }}
+        autoPlay
+        muted
+        playsInline
+      />
       <button
         onClick={handleClick}
         className="absolute w-16 h-16 rounded-full bg-blue-500 hover:bg-yellow-600 z-20"
@@ -74,8 +134,6 @@ export default function GridFixationClick({ onNext, videoRef, frameBufferRef, on
           transform: 'translate(-50%, -50%)',
         }}
       />
-
-      {/* 진행도 표시 */}
       <div className="absolute top-4 left-4 text-white text-sm">
         클릭 {index + 1} / {targets.current.length}
       </div>
